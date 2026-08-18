@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+runtime/bridge.db
+runtime/logs/*
+runtime/workspaces/*
+!runtime/logs/.gitkeep
+!runtime/workspaces/.gitkeep

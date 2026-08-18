@@ -1,0 +1,22 @@
+server:
+  host: "127.0.0.1"
+  port: 8000
+
+runtime:
+  database: "./runtime/bridge.db"
+  workspace_root: "./runtime/workspaces"
+  log_root: "./runtime/logs"
+
+bridge:
+  synchronous_wait_seconds: 30
+
+deepseek:
+  enabled: false
+  transport: "mock"
+
+codex:
+  enabled: false
+  transport: "mock"
+
+web:
+  enabled: true
