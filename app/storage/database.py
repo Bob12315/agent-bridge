@@ -27,6 +27,7 @@ class Database:
                     base_branch TEXT NOT NULL,
                     current_branch TEXT NOT NULL,
                     base_commit TEXT,
+                    access_mode TEXT NOT NULL DEFAULT 'inspect',
                     status TEXT NOT NULL,
                     current_task_id TEXT,
                     created_at TEXT NOT NULL,
@@ -88,6 +89,10 @@ class Database:
             }
             if "base_commit" not in columns:
                 await connection.execute("ALTER TABLE sessions ADD COLUMN base_commit TEXT")
+            if "access_mode" not in columns:
+                await connection.execute(
+                    "ALTER TABLE sessions ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'inspect'"
+                )
             request_columns = {
                 row[1]
                 for row in await (await connection.execute("PRAGMA table_info(requests)"))
@@ -106,11 +111,12 @@ class Database:
             await connection.execute(
                 """INSERT INTO sessions
                 (id, project_name, workspace, base_branch, current_branch,
-                 base_commit, status, current_task_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 base_commit, access_mode, status, current_task_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session.id, session.project_name, str(session.workspace),
                     session.base_branch, session.current_branch, session.base_commit,
+                    session.access_mode,
                     session.status, session.current_task_id, session.created_at.isoformat(),
                     session.updated_at.isoformat(),
                 ),
@@ -129,8 +135,8 @@ class Database:
             await connection.execute(
                 """INSERT INTO sessions
                 (id, project_name, workspace, base_branch, current_branch,
-                 base_commit, status, current_task_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 base_commit, access_mode, status, current_task_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session.id,
                     session.project_name,
@@ -138,6 +144,7 @@ class Database:
                     session.base_branch,
                     session.current_branch,
                     session.base_commit,
+                    session.access_mode,
                     session.status,
                     session.current_task_id,
                     session.created_at.isoformat(),

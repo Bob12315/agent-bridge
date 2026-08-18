@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.bridge.protocol import new_id, utc_now
-from app.bridge.session import AgentSession, SessionContext
+from app.bridge.session import AccessMode, AgentSession, SessionContext
 from app.runtime.workspace import WorkspaceManager
 from app.storage.database import Database
 from app.storage.models import EventRecord
@@ -19,7 +19,11 @@ class SessionManager:
         self._workspaces = workspaces
 
     async def create_session(
-        self, project_name: str, repo_path: Path, base_branch: str = "main"
+        self,
+        project_name: str,
+        repo_path: Path,
+        base_branch: str = "main",
+        access_mode: AccessMode = "inspect",
     ) -> SessionContext:
         if not project_name.strip():
             raise SessionError("project name must not be empty")
@@ -39,6 +43,7 @@ class SessionManager:
                 base_branch=base_branch,
                 current_branch=branch,
                 base_commit=workspace.repository.base_commit,
+                access_mode=access_mode,
             )
             agent_sessions = [
                 AgentSession(

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.adapters.base import AgentAdapterTimeout
 from app.bridge.protocol import MessageEnvelope, new_id, utc_now
+from app.bridge.policy import PolicyError, ReadOnlyViolation
 from app.bridge.router import Router
 from app.bridge.session import SessionContext
 from app.storage.database import Database
@@ -225,7 +226,13 @@ class RequestManager:
             await self._mark_failed(
                 request,
                 context,
-                code="AGENT_ERROR",
+                code=(
+                    "READ_ONLY_VIOLATION"
+                    if isinstance(exc, ReadOnlyViolation)
+                    else "POLICY_DENIED"
+                    if isinstance(exc, PolicyError)
+                    else "AGENT_ERROR"
+                ),
                 message=str(exc) or type(exc).__name__,
                 agent_started=agent_started,
             )

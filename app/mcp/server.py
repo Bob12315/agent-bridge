@@ -55,12 +55,14 @@ def create_mcp_server(
         "Agent Bridge",
         version=__version__,
         instructions=(
-            "One-hop bridge controlled by ChatGPT. Each bridge_send call invokes "
-            "exactly one DeepSeek or Codex turn; no workflow step is automatic."
+            "One-hop bridge controlled by ChatGPT. Use bridge_inspect for fixed "
+            "read-only workspace operations. bridge_send requires an explicit "
+            "develop or review execution mode; no workflow step is automatic."
         ),
         lifespan=lifespan,
     )
     server.tool()(bridge.bridge_create_session)
+    server.tool()(bridge.bridge_inspect)
     server.tool()(bridge.bridge_send)
     server.tool()(bridge.bridge_wait)
     server.tool()(bridge.bridge_status)

@@ -167,7 +167,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
     )
 
     created = await service.bridge_create_session(
-        "windows-validation", str(git_repository), "main"
+        "windows-validation", str(git_repository), "main", "develop"
     )
     assert created.status == "completed"
     session_id = created.session_id
@@ -180,6 +180,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
         "deepseek",
         "task",
         MessageContent(text="Implement the Windows validation change."),
+        "develop",
         task_id="task_windows",
         stage=9,
         round=1,
@@ -199,6 +200,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
             text="Review the actual Windows worktree and Git status.",
             changed_files=["implemented.txt"],
         ),
+        "review",
         task_id="task_windows",
         stage=9,
         round=1,
@@ -214,6 +216,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
         "deepseek",
         "task",
         MessageContent(text="SLOW cancellation check"),
+        "develop",
         task_id="task_windows_cancel",
         stage=9,
         round=2,
@@ -240,6 +243,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
         "deepseek",
         "task",
         MessageContent(text="SLOW timeout check"),
+        "develop",
         task_id="task_windows_timeout",
         stage=9,
         round=3,
@@ -265,6 +269,7 @@ async def test_native_windows_full_stack_and_restart_recovery(
         "codex",
         "review_request",
         MessageContent(text="Confirm the restored session remains usable."),
+        "review",
         stage=9,
         round=4,
     )

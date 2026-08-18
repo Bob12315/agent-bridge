@@ -16,6 +16,7 @@ EventType = Literal[
     "AGENT_PROGRESS",
     "AGENT_FINISHED",
     "AGENT_FAILED",
+    "POLICY_VIOLATION",
     "REQUEST_CANCELLED",
     "SESSION_CLOSED",
 ]

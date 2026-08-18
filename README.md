@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前九个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter、Codex Reviewer Adapter、完整端到端链路验证和 Windows 全面验证。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
+当前完成前十个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter、Codex Reviewer Adapter、完整端到端链路验证、Windows 全面验证和 Capability Policy。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
 
 ## 开发环境
 
@@ -46,6 +46,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 ## MCP Server
 
+ChatGPT 插件、Secure MCP Tunnel、Windows 启动命令和故障排查请参阅 [完整连接说明](docs/CHATGPT_MCP_CONNECTION_GUIDE.md)。
+
 本地 MCP Host 默认通过 stdio 启动 Bridge：
 
 ```text
@@ -58,10 +60,11 @@ python -m app.mcp.server --config config/config.example.yaml
 python -m app.mcp.server --config config/config.example.yaml --transport streamable-http
 ```
 
-默认端点为 `http://127.0.0.1:8001/mcp`，可在配置文件的 `mcp` 部分修改。V1 只暴露以下六个工具：
+默认端点为 `http://127.0.0.1:8001/mcp`，可在配置文件的 `mcp` 部分修改。V1 暴露以下七个工具：
 
 ```text
 bridge_create_session
+bridge_inspect
 bridge_send
 bridge_wait
 bridge_status
@@ -69,7 +72,7 @@ bridge_cancel
 bridge_close_session
 ```
 
-`bridge_send` 的输入中没有 `sender`、`id` 或 `created_at`；Bridge 会强制发送者为 ChatGPT 并生成其余字段。每次调用只执行目标 Agent 的一次 turn。`bridge_wait` 和 `bridge_status` 只观察已有请求，不会触发新的 Agent 调用。工具失败会返回稳定的 `error.code` 和 `error.message`，不会向客户端暴露内部 traceback。
+`bridge_create_session` 必须选择最大权限：`inspect`、`review` 或 `develop`，默认是安全的 `inspect`。`bridge_inspect` 只支持固定的读取、搜索和 Git 查询，不能执行任意 shell、访问网络或离开 Session Worktree。`bridge_send` 必须显式带 `execution_mode`：DeepSeek 任务只能用 `develop`，Codex 审核只能用 `review`；任务文本不能提升权限。审核前后会检查 Git 状态，若 Codex 意外修改文件，Bridge 返回 `READ_ONLY_VIOLATION` 并保留 Worktree 供人工处理。`bridge_wait` 和 `bridge_status` 只观察已有请求，不会触发新的 Agent 调用。
 
 ## DeepSeek Executor
 

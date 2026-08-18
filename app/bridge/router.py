@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from app.adapters.base import AgentAdapter
+from app.bridge.inspection import WorkspaceInspector
+from app.bridge.policy import ReadOnlyViolation, validate_agent_turn
 from app.bridge.protocol import MessageEnvelope, new_id
 from app.bridge.session import SessionContext
 from app.storage.database import Database
@@ -19,6 +21,7 @@ class Router:
     def __init__(self, adapters: Mapping[str, AgentAdapter], database: Database) -> None:
         self._adapters = dict(adapters)
         self._database = database
+        self._inspector = WorkspaceInspector()
 
     async def route(
         self,
@@ -32,6 +35,7 @@ class Router:
             raise RoutingError("message and context session IDs do not match")
         if message.receiver not in {"deepseek", "codex"}:
             raise RoutingError(f"receiver is not locally routable: {message.receiver}")
+        validate_agent_turn(message, context)
         adapter = self._adapters.get(message.receiver)
         if adapter is None:
             raise RoutingError(f"no adapter registered for {message.receiver}")
@@ -49,7 +53,15 @@ class Router:
             )
         )
 
-        result = await adapter.send(message, context)
+        before = None
+        if message.receiver == "codex" and (context.workspace / ".git").exists():
+            before = await self._inspector.status_snapshot(context)
+        try:
+            result = await adapter.send(message, context)
+        except BaseException:
+            await self._raise_if_read_only_changed(context, message, before)
+            raise
+        await self._raise_if_read_only_changed(context, message, before)
         response = result.response
         if response.session_id != message.session_id:
             raise RoutingError("adapter response belongs to another session")
@@ -60,6 +72,29 @@ class Router:
 
         await self._database.insert_message(response)
         return response
+
+    async def _raise_if_read_only_changed(
+        self,
+        context: SessionContext,
+        message: MessageEnvelope,
+        before: str | None,
+    ) -> None:
+        if before is None:
+            return
+        after = await self._inspector.status_snapshot(context)
+        if after == before:
+            return
+        violation = "READ_ONLY_VIOLATION: Codex review changed the session workspace."
+        await self._database.insert_event(
+            EventRecord(
+                id=new_id("evt"),
+                session_id=context.id,
+                agent=message.receiver,
+                type="POLICY_VIOLATION",
+                message=violation,
+            )
+        )
+        raise ReadOnlyViolation(violation)
 
     def adapter_for(self, receiver: str) -> AgentAdapter:
         if receiver not in {"deepseek", "codex"}:

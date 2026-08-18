@@ -37,7 +37,7 @@ async def test_tools_complete_mock_round_trip_and_force_chatgpt_sender(
     )
 
     created = await service.bridge_create_session(
-        "demo", str(git_repository), "main"
+        "demo", str(git_repository), "main", "develop"
     )
     assert isinstance(created, CreateSessionToolResult)
     assert created.agents == {"codex": "ready", "deepseek": "ready"}
@@ -47,6 +47,7 @@ async def test_tools_complete_mock_round_trip_and_force_chatgpt_sender(
         "deepseek",
         "task",
         MessageContent(text="Implement the explicit task only."),
+        "develop",
         task_id="task_1",
         stage=5,
         round=1,
@@ -92,13 +93,16 @@ async def test_tool_errors_are_structured_and_close_rejects_active_request(
     assert isinstance(missing, RequestToolResult)
     assert missing.error.code == "REQUEST_NOT_FOUND"
 
-    created = await service.bridge_create_session("demo", str(git_repository))
+    created = await service.bridge_create_session(
+        "demo", str(git_repository), access_mode="develop"
+    )
     assert isinstance(created, CreateSessionToolResult)
     running = await service.bridge_send(
         created.session_id,
         "deepseek",
         "task",
         MessageContent(text="Long task"),
+        "develop",
     )
     assert running.status == "running"
     refused = await service.bridge_close_session(created.session_id)
@@ -109,7 +113,7 @@ async def test_tool_errors_are_structured_and_close_rejects_active_request(
     assert (await service.bridge_close_session(created.session_id)).status == "completed"
 
 
-async def test_mcp_server_exposes_only_six_tools_and_runs_in_memory(
+async def test_mcp_server_exposes_capability_tools_and_runs_in_memory(
     git_repository: Path, tmp_path: Path
 ) -> None:
     config = mcp_config(tmp_path)
@@ -120,6 +124,7 @@ async def test_mcp_server_exposes_only_six_tools_and_runs_in_memory(
         listed = await client.list_tools()
         assert {tool.name for tool in listed.tools} == {
             "bridge_create_session",
+            "bridge_inspect",
             "bridge_send",
             "bridge_wait",
             "bridge_status",
@@ -138,6 +143,7 @@ async def test_mcp_server_exposes_only_six_tools_and_runs_in_memory(
                 "project_name": "mcp-demo",
                 "repo_path": str(git_repository),
                 "base_branch": "main",
+                "access_mode": "develop",
             },
         )
         assert created.is_error is False
@@ -151,6 +157,7 @@ async def test_mcp_server_exposes_only_six_tools_and_runs_in_memory(
                 "receiver": "codex",
                 "type": "review_request",
                 "content": {"text": "Review this stage."},
+                "execution_mode": "review",
                 "stage": 5,
                 "round": 1,
             },
