@@ -30,6 +30,10 @@ class AgentConfig(BaseModel):
     health_timeout_seconds: float = Field(default=15, gt=0)
 
 
+class CodexConfig(AgentConfig):
+    executable: str = "codex"
+
+
 class WebConfig(BaseModel):
     enabled: bool = True
 
@@ -48,7 +52,7 @@ class AppConfig(BaseModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     bridge: BridgeConfig = Field(default_factory=BridgeConfig)
     deepseek: AgentConfig = Field(default_factory=AgentConfig)
-    codex: AgentConfig = Field(default_factory=AgentConfig)
+    codex: CodexConfig = Field(default_factory=CodexConfig)
     web: WebConfig = Field(default_factory=WebConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
 

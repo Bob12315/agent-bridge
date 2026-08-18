@@ -20,6 +20,9 @@ deepseek:
 codex:
   enabled: false
   transport: "mock"
+  executable: "codex"
+  timeout_seconds: 1800
+  health_timeout_seconds: 15
 
 web:
   enabled: true

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.adapters.base import AgentHealth
@@ -21,6 +22,26 @@ class DeepSeekTransport(ABC):
 
     @abstractmethod
     async def cancel(self, session_id: str) -> None: ...
+
+    @abstractmethod
+    async def health(self) -> AgentHealth: ...
+
+    @abstractmethod
+    async def close(self) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CodexReviewOutput:
+    response: str
+    external_session_id: str
+
+
+class CodexTransport(ABC):
+    @abstractmethod
+    async def review(self, workspace: Path, prompt: str) -> CodexReviewOutput: ...
+
+    @abstractmethod
+    async def cancel(self) -> None: ...
 
     @abstractmethod
     async def health(self) -> AgentHealth: ...

@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前六个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server 和 DeepSeek Executor Adapter。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。真实 Codex Reviewer Adapter 将在下一阶段接入。
+当前完成前七个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter 和 Codex Reviewer Adapter。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
 
 ## 开发环境
 
@@ -87,3 +87,18 @@ deepseek:
 ```
 
 每个 Bridge Session 会保持一个 Executor Session。第一次调用创建执行上下文，后续调用使用外部 Session ID 恢复；CLI 的 cwd 和 `--workspace` 都固定为该 Session 的 Git Worktree。执行使用参数数组而非 shell 字符串，并支持进程树取消、硬超时以及 `doctor --json` 健康检查。
+
+## Codex Reviewer
+
+第七阶段通过 Codex CLI 的非交互模式接入独立代码审核员。Codex CLI 必须已安装并完成登录。
+
+```yaml
+codex:
+  enabled: true
+  transport: "cli"
+  executable: "codex"
+  timeout_seconds: 1800
+  health_timeout_seconds: 15
+```
+
+每个 `review_request` 都使用全新的临时 Reviewer Session，不恢复之前的审核会话。进程 cwd 与 `--cd` 都绑定当前 Session Worktree，并强制使用 `read-only` sandbox。Reviewer 会直接读取实际 Git 状态和 Diff，但不得修改、格式化或提交文件。最终结果由 JSON Schema 约束为 `PASS` 或 `CHANGES_REQUIRED`，并包含结构化问题列表；进程支持取消、硬超时和健康检查。

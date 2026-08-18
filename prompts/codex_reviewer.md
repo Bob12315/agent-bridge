@@ -4,3 +4,6 @@
 请直接检查实际仓库与 Git Diff，不要仅相信 Executor 声称的测试结果。
 
 最终必须返回 PASS 或 CHANGES_REQUIRED。
+
+输出必须符合提供的 JSON Schema：包含 verdict、text、issues 和 blocking。
+PASS 时 issues 必须为空且 blocking=false；CHANGES_REQUIRED 时必须列出至少一个具体问题且 blocking=true。

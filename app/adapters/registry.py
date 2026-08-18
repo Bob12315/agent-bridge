@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from app.adapters.base import AgentAdapter
+from app.adapters.codex import CodexAdapter
 from app.adapters.deepseek import DeepSeekAdapter
 from app.adapters.mock import MockAdapter
+from app.adapters.transports.codex_cli import CodexCLITransport
 from app.adapters.transports.deepseek_cli import DeepSeekCLITransport
 from app.config import AppConfig
 
@@ -22,7 +24,16 @@ def build_adapter_registry(config: AppConfig) -> dict[str, AgentAdapter]:
         raise ValueError(
             f"unsupported DeepSeek transport: {config.deepseek.transport}"
         )
-    return {
-        "deepseek": deepseek,
-        "codex": MockAdapter("codex"),
-    }
+    if not config.codex.enabled or config.codex.transport == "mock":
+        codex: AgentAdapter = MockAdapter("codex")
+    elif config.codex.transport == "cli":
+        codex = CodexAdapter(
+            CodexCLITransport(
+                executable=config.codex.executable,
+                timeout_seconds=config.codex.timeout_seconds,
+                health_timeout_seconds=config.codex.health_timeout_seconds,
+            )
+        )
+    else:
+        raise ValueError(f"unsupported Codex transport: {config.codex.transport}")
+    return {"deepseek": deepseek, "codex": codex}
