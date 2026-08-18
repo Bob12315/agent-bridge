@@ -62,6 +62,8 @@ class Database:
                     queued_at TEXT NOT NULL,
                     started_at TEXT,
                     finished_at TEXT,
+                    response_message_id TEXT,
+                    error_code TEXT,
                     error TEXT
                 );
                 CREATE TABLE IF NOT EXISTS events (
@@ -86,6 +88,17 @@ class Database:
             }
             if "base_commit" not in columns:
                 await connection.execute("ALTER TABLE sessions ADD COLUMN base_commit TEXT")
+            request_columns = {
+                row[1]
+                for row in await (await connection.execute("PRAGMA table_info(requests)"))
+                .fetchall()
+            }
+            if "response_message_id" not in request_columns:
+                await connection.execute(
+                    "ALTER TABLE requests ADD COLUMN response_message_id TEXT"
+                )
+            if "error_code" not in request_columns:
+                await connection.execute("ALTER TABLE requests ADD COLUMN error_code TEXT")
             await connection.commit()
 
     async def insert_session(self, session: SessionContext) -> None:
@@ -183,6 +196,34 @@ class Database:
             rows = await cursor.fetchall()
         return [AgentSession.model_validate(dict(row)) for row in rows]
 
+    async def get_agent_session(
+        self, bridge_session_id: str, agent: str
+    ) -> AgentSession | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            cursor = await connection.execute(
+                """SELECT * FROM agent_sessions
+                WHERE bridge_session_id = ? AND agent = ?""",
+                (bridge_session_id, agent),
+            )
+            row = await cursor.fetchone()
+        return AgentSession.model_validate(dict(row)) if row else None
+
+    async def update_agent_session_status(
+        self, bridge_session_id: str, agent: str, status: str
+    ) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            cursor = await connection.execute(
+                """UPDATE agent_sessions SET status = ?
+                WHERE bridge_session_id = ? AND agent = ?""",
+                (status, bridge_session_id, agent),
+            )
+            if cursor.rowcount != 1:
+                raise LookupError(
+                    f"agent session not found: {bridge_session_id}/{agent}"
+                )
+            await connection.commit()
+
     async def update_session_status(
         self, session_id: str, status: str, updated_at: str
     ) -> None:
@@ -261,15 +302,109 @@ class Database:
     async def insert_request(self, request: RequestRecord) -> None:
         async with aiosqlite.connect(self.path) as connection:
             await connection.execute(
-                "INSERT INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                """INSERT INTO requests
+                (id, message_id, session_id, agent, status, queued_at, started_at,
+                 finished_at, response_message_id, error_code, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     request.id, request.message_id, request.session_id, request.agent,
                     request.status, request.queued_at.isoformat(),
                     request.started_at.isoformat() if request.started_at else None,
                     request.finished_at.isoformat() if request.finished_at else None,
+                    request.response_message_id, request.error_code,
                     request.error,
                 ),
             )
+            await connection.commit()
+
+    async def create_request(
+        self,
+        message: MessageEnvelope,
+        request: RequestRecord,
+        event: EventRecord,
+    ) -> None:
+        """Persist the incoming message and queued request atomically."""
+        async with aiosqlite.connect(self.path) as connection:
+            await connection.execute("PRAGMA foreign_keys = ON")
+            await connection.execute(
+                """INSERT INTO messages
+                (id, session_id, sender, receiver, type, task_id, stage, round,
+                 reply_to, content_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    message.id,
+                    message.session_id,
+                    message.sender,
+                    message.receiver,
+                    message.type,
+                    message.task_id,
+                    message.stage,
+                    message.round,
+                    message.reply_to,
+                    message.content.model_dump_json(),
+                    message.created_at.isoformat(),
+                ),
+            )
+            await connection.execute(
+                """INSERT INTO requests
+                (id, message_id, session_id, agent, status, queued_at, started_at,
+                 finished_at, response_message_id, error_code, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    request.id,
+                    request.message_id,
+                    request.session_id,
+                    request.agent,
+                    request.status,
+                    request.queued_at.isoformat(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            )
+            await connection.execute(
+                "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    event.id,
+                    event.session_id,
+                    event.request_id,
+                    event.agent,
+                    event.type,
+                    event.message,
+                    event.created_at.isoformat(),
+                ),
+            )
+            await connection.commit()
+
+    async def get_request(self, request_id: str) -> RequestRecord | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            cursor = await connection.execute(
+                "SELECT * FROM requests WHERE id = ?", (request_id,)
+            )
+            row = await cursor.fetchone()
+        return RequestRecord.model_validate(dict(row)) if row else None
+
+    async def update_request(self, request: RequestRecord) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            cursor = await connection.execute(
+                """UPDATE requests SET status = ?, started_at = ?, finished_at = ?,
+                    response_message_id = ?, error_code = ?, error = ?
+                WHERE id = ?""",
+                (
+                    request.status,
+                    request.started_at.isoformat() if request.started_at else None,
+                    request.finished_at.isoformat() if request.finished_at else None,
+                    request.response_message_id,
+                    request.error_code,
+                    request.error,
+                    request.id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise LookupError(f"request not found: {request.id}")
             await connection.commit()
 
     async def insert_event(self, event: EventRecord) -> None:

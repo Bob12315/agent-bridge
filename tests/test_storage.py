@@ -5,7 +5,7 @@ from pathlib import Path
 import aiosqlite
 
 from app.bridge.protocol import MessageContent, MessageEnvelope, utc_now
-from app.bridge.session import AgentSession, SessionContext
+from app.bridge.session import SessionContext
 from app.storage.database import Database
 from app.storage.models import EventRecord, RequestRecord
 
@@ -18,10 +18,6 @@ async def test_session_round_trip(database: Database, session: SessionContext) -
 async def test_all_foundation_records_are_persisted(
     database: Database, session: SessionContext
 ) -> None:
-    agent_session = AgentSession(
-        id="ags_1", bridge_session_id=session.id, agent="deepseek"
-    )
-    await database.insert_agent_session(agent_session)
     message = MessageEnvelope(
         id="msg_1",
         session_id=session.id,
@@ -75,6 +71,19 @@ async def test_initialize_migrates_foundation_database(tmp_path: Path) -> None:
                 updated_at TEXT NOT NULL
             )"""
         )
+        await connection.execute(
+            """CREATE TABLE requests (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                agent TEXT NOT NULL,
+                status TEXT NOT NULL,
+                queued_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                error TEXT
+            )"""
+        )
         await connection.commit()
 
     database = Database(path)
@@ -85,4 +94,10 @@ async def test_initialize_migrates_foundation_database(tmp_path: Path) -> None:
             for row in await (await connection.execute("PRAGMA table_info(sessions)"))
             .fetchall()
         }
+        request_columns = {
+            row[1]
+            for row in await (await connection.execute("PRAGMA table_info(requests)"))
+            .fetchall()
+        }
     assert "base_commit" in columns
+    assert {"response_message_id", "error_code"} <= request_columns

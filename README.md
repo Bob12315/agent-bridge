@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成 **Stage 1 — Foundation** 和 **Stage 2 — Session + Git Workspace**：配置、严格类型化的通信协议、SQLite 存储、统一 Adapter 接口、MockAdapter、单跳 Router，以及 SessionManager、Git 仓库验证和 Worktree 生命周期管理。异步请求管理、Web UI、MCP 及真实 Agent Adapter 将按后续阶段实现。
+当前完成前三个阶段：Foundation、Session + Git Workspace，以及 Async Request Manager。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消和跨平台进程树管理。Web UI、MCP 及真实 Agent Adapter 将按后续阶段实现。
 
 ## 开发环境
 
@@ -29,3 +29,7 @@ Executor 后续只在该 Worktree 中读写。关闭 Session 时会移除 Worktr
 ## 核心约束
 
 一次 `Router.route()` 只选择一个 receiver、调用一个 Adapter 一次，并返回该 Agent 的一条响应。Router 不检查审核 verdict 来触发后续工作，也不会自动调用其他 Agent。
+
+## Async Requests
+
+`RequestManager.send()` 会先持久化 Message 和 Request，再执行一次 Router turn。目标 Agent 在同步等待窗口内完成时直接返回结果，否则返回同一 `request_id` 的 `running` 状态。后续 `wait()` 和 `status()` 只观察该请求，不会启动新的 Agent turn；`cancel()` 会终止运行中的 Adapter turn或安全取消尚在排队的请求。

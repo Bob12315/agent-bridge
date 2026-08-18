@@ -5,7 +5,7 @@ import subprocess
 
 import pytest_asyncio
 
-from app.bridge.session import SessionContext
+from app.bridge.session import AgentSession, SessionContext
 from app.storage.database import Database
 
 
@@ -54,4 +54,12 @@ async def session(database: Database, tmp_path: Path) -> SessionContext:
         current_branch="bridge/ses_test",
     )
     await database.insert_session(context)
+    for agent in ("deepseek", "codex"):
+        await database.insert_agent_session(
+            AgentSession(
+                id=f"ags_{agent}",
+                bridge_session_id=context.id,
+                agent=agent,
+            )
+        )
     return context

@@ -30,6 +30,8 @@ class RequestRecord(BaseModel):
     queued_at: datetime = Field(default_factory=utc_now)
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    response_message_id: str | None = None
+    error_code: str | None = None
     error: str | None = None
 
 

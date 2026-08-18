@@ -21,7 +21,12 @@ class Router:
         self._database = database
 
     async def route(
-        self, message: MessageEnvelope, context: SessionContext
+        self,
+        message: MessageEnvelope,
+        context: SessionContext,
+        *,
+        store_incoming: bool = True,
+        request_id: str | None = None,
     ) -> MessageEnvelope:
         if message.session_id != context.id:
             raise RoutingError("message and context session IDs do not match")
@@ -31,11 +36,13 @@ class Router:
         if adapter is None:
             raise RoutingError(f"no adapter registered for {message.receiver}")
 
-        await self._database.insert_message(message)
+        if store_incoming:
+            await self._database.insert_message(message)
         await self._database.insert_event(
             EventRecord(
                 id=new_id("evt"),
                 session_id=context.id,
+                request_id=request_id,
                 agent=message.receiver,
                 type="MESSAGE_ROUTED",
                 message=f"Routed {message.id} to {message.receiver}",
@@ -53,3 +60,11 @@ class Router:
 
         await self._database.insert_message(response)
         return response
+
+    def adapter_for(self, receiver: str) -> AgentAdapter:
+        if receiver not in {"deepseek", "codex"}:
+            raise RoutingError(f"receiver is not locally routable: {receiver}")
+        adapter = self._adapters.get(receiver)
+        if adapter is None:
+            raise RoutingError(f"no adapter registered for {receiver}")
+        return adapter
