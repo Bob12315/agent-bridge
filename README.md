@@ -33,3 +33,13 @@ Executor 后续只在该 Worktree 中读写。关闭 Session 时会移除 Worktr
 ## Async Requests
 
 `RequestManager.send()` 会先持久化 Message 和 Request，再执行一次 Router turn。目标 Agent 在同步等待窗口内完成时直接返回结果，否则返回同一 `request_id` 的 `running` 状态。后续 `wait()` 和 `status()` 只观察该请求，不会启动新的 Agent turn；`cancel()` 会终止运行中的 Adapter turn或安全取消尚在排队的请求。
+
+## Web Dashboard
+
+启动本地监控台：
+
+```text
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+浏览器打开 `http://127.0.0.1:8000`。Dashboard 提供 Session 列表、Agent 状态、显式 Stage/Round、当前活动、Message/Event 时间线、请求耗时、错误详情和 Cancel 操作。`/api/events` 提供 SSE 实时事件流；页面也保留低频刷新作为连接中断时的回退。

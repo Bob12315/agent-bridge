@@ -20,7 +20,7 @@ async def test_start_and_wait_with_cwd_and_environment(tmp_path: Path) -> None:
         "-c",
         "import os; print(os.getcwd()); print(os.environ['BRIDGE_TEST'])",
         cwd=cwd,
-        env={"BRIDGE_TEST": "ready"},
+        env={"BRIDGE_TEST": "ready", "COV_CORE_DATAFILE": ""},
     )
     result = await manager.wait(process, timeout=5)
     assert result.returncode == 0
@@ -31,7 +31,12 @@ async def test_start_and_wait_with_cwd_and_environment(tmp_path: Path) -> None:
 
 async def test_timeout_then_terminate() -> None:
     manager = ProcessManager()
-    process = await manager.start(sys.executable, "-c", "import time; time.sleep(30)")
+    process = await manager.start(
+        sys.executable,
+        "-c",
+        "import time; time.sleep(30)",
+        env={"COV_CORE_DATAFILE": ""},
+    )
     with pytest.raises(ProcessTimeout, match="did not finish"):
         await manager.wait(process, timeout=0.02)
     await manager.terminate(process, timeout=0.2)
@@ -40,7 +45,12 @@ async def test_timeout_then_terminate() -> None:
 
 async def test_kill_tree_and_finished_process_are_safe() -> None:
     manager = ProcessManager()
-    process = await manager.start(sys.executable, "-c", "import time; time.sleep(30)")
+    process = await manager.start(
+        sys.executable,
+        "-c",
+        "import time; time.sleep(30)",
+        env={"COV_CORE_DATAFILE": ""},
+    )
     await manager.kill_tree(process)
     assert process.returncode is not None
     await manager.kill_tree(process)

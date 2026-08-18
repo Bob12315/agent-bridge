@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ session.project_name }} · Agent Bridge{% endblock %}
+{% block content %}
+<div class="crumbs"><a href="/">Sessions</a><span>/</span><span>{{ session.id }}</span></div>
+<div id="session-panel"
+     data-session-id="{{ session.id }}"
+     hx-get="/sessions/{{ session.id }}/panel"
+     hx-trigger="every 3s"
+     hx-swap="innerHTML">
+  {% include "_session_panel.html" %}
+</div>
+{% endblock %}

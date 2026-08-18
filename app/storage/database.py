@@ -178,6 +178,15 @@ class Database:
             row = await cursor.fetchone()
         return SessionContext.model_validate(dict(row)) if row else None
 
+    async def list_sessions(self, limit: int = 100) -> list[SessionContext]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            cursor = await connection.execute(
+                "SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?", (limit,)
+            )
+            rows = await cursor.fetchall()
+        return [SessionContext.model_validate(dict(row)) for row in rows]
+
     async def insert_agent_session(self, session: AgentSession) -> None:
         async with aiosqlite.connect(self.path) as connection:
             await connection.execute(
@@ -299,6 +308,24 @@ class Database:
         data["content"] = json.loads(data.pop("content_json"))
         return MessageEnvelope.model_validate(data)
 
+    async def list_messages(
+        self, session_id: str, limit: int = 200
+    ) -> list[MessageEnvelope]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            cursor = await connection.execute(
+                """SELECT * FROM messages WHERE session_id = ?
+                ORDER BY created_at DESC LIMIT ?""",
+                (session_id, limit),
+            )
+            rows = await cursor.fetchall()
+        messages: list[MessageEnvelope] = []
+        for row in reversed(rows):
+            data = dict(row)
+            data["content"] = json.loads(data.pop("content_json"))
+            messages.append(MessageEnvelope.model_validate(data))
+        return messages
+
     async def insert_request(self, request: RequestRecord) -> None:
         async with aiosqlite.connect(self.path) as connection:
             await connection.execute(
@@ -387,6 +414,19 @@ class Database:
             row = await cursor.fetchone()
         return RequestRecord.model_validate(dict(row)) if row else None
 
+    async def list_requests(
+        self, session_id: str, limit: int = 100
+    ) -> list[RequestRecord]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            cursor = await connection.execute(
+                """SELECT * FROM requests WHERE session_id = ?
+                ORDER BY queued_at DESC LIMIT ?""",
+                (session_id, limit),
+            )
+            rows = await cursor.fetchall()
+        return [RequestRecord.model_validate(dict(row)) for row in rows]
+
     async def update_request(self, request: RequestRecord) -> None:
         async with aiosqlite.connect(self.path) as connection:
             cursor = await connection.execute(
@@ -423,6 +463,42 @@ class Database:
             connection.row_factory = aiosqlite.Row
             cursor = await connection.execute(
                 "SELECT * FROM events WHERE session_id = ? ORDER BY created_at", (session_id,)
+            )
+            rows = await cursor.fetchall()
+        return [EventRecord.model_validate(dict(row)) for row in rows]
+
+    async def list_events_after(
+        self,
+        after_event_id: str | None = None,
+        session_id: str | None = None,
+        limit: int = 100,
+    ) -> list[EventRecord]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            clauses: list[str] = []
+            parameters: list[object] = []
+            if session_id is not None:
+                clauses.append("session_id = ?")
+                parameters.append(session_id)
+            if after_event_id is not None:
+                cursor = await connection.execute(
+                    "SELECT created_at, id FROM events WHERE id = ?",
+                    (after_event_id,),
+                )
+                after = await cursor.fetchone()
+                if after is not None:
+                    clauses.append(
+                        "(created_at > ? OR (created_at = ? AND id > ?))"
+                    )
+                    parameters.extend(
+                        [after["created_at"], after["created_at"], after["id"]]
+                    )
+            where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+            parameters.append(limit)
+            cursor = await connection.execute(
+                f"""SELECT * FROM events {where}
+                ORDER BY created_at, id LIMIT ?""",
+                parameters,
             )
             rows = await cursor.fetchall()
         return [EventRecord.model_validate(dict(row)) for row in rows]

@@ -1,0 +1,77 @@
+<section class="page-heading compact">
+  <div>
+    <p class="eyebrow">{{ session.id }}</p>
+    <h1>{{ session.project_name }}</h1>
+    <p class="mono muted">{{ session.workspace }}</p>
+  </div>
+  <div class="stage-box">
+    <div><span>Stage</span><strong>{{ stage if stage is not none else '—' }}</strong></div>
+    <div><span>Round</span><strong>{{ round if round is not none else '—' }}</strong></div>
+  </div>
+</section>
+
+<section class="agent-grid">
+  <article class="agent-card">
+    <div class="agent-icon">CG</div><div><span>ChatGPT</span><strong class="connected">CONNECTED</strong></div>
+  </article>
+  {% for name in ['deepseek', 'codex'] %}
+  {% set agent = agents.get(name) %}
+  <a class="agent-card" href="/sessions/{{ session.id }}/agents/{{ name }}">
+    <div class="agent-icon">{{ 'DS' if name == 'deepseek' else 'CX' }}</div>
+    <div><span>{{ name | capitalize }}</span><strong class="{{ agent.status if agent else 'error' }}">{{ agent.status | upper if agent else 'UNKNOWN' }}</strong></div>
+  </a>
+  {% endfor %}
+</section>
+
+<section class="panel activity">
+  <div class="section-title"><h2>Current Activity</h2><span class="status {{ session.status }}">{{ session.status }}</span></div>
+  {% if current_request %}
+  <div class="activity-flow">
+    <strong>ChatGPT</strong><span class="flow-line">──────────►</span><strong>{{ current_request.agent | capitalize }}</strong>
+  </div>
+  <p class="type-label">{{ current_message.type | upper if current_message else 'REQUEST' }}</p>
+  <p>{{ current_message.content.text if current_message else current_request.message_id }}</p>
+  <form method="post" action="/requests/{{ current_request.id }}/cancel">
+    <button class="button danger" type="submit">Cancel request</button>
+  </form>
+  {% else %}
+  <p class="muted">No Agent turn is currently queued or running.</p>
+  {% endif %}
+</section>
+
+<div class="timeline-grid">
+  <section class="panel">
+    <div class="section-title"><h2>Message Timeline</h2><span>{{ messages | length }}</span></div>
+    <div class="timeline">
+      {% for message in messages | reverse %}
+      <article class="timeline-item">
+        <time>{{ message.created_at.strftime('%H:%M:%S') }}</time>
+        <div><strong>{{ message.sender | capitalize }} → {{ message.receiver | capitalize }}</strong><span class="type-label">{{ message.type }}</span><p>{{ message.content.text }}</p></div>
+      </article>
+      {% else %}<p class="muted">No messages.</p>{% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="section-title"><h2>Event Timeline</h2><span>{{ events | length }}</span></div>
+    <div class="timeline">
+      {% for event in events | reverse %}
+      <article class="timeline-item">
+        <time>{{ event.created_at.strftime('%H:%M:%S') }}</time>
+        <div><strong>{{ event.type }}</strong><p>{{ event.message }}</p></div>
+      </article>
+      {% else %}<p class="muted">No events.</p>{% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="section-title"><h2>Requests</h2><span>{{ requests | length }}</span></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Request</th><th>Agent</th><th>Status</th><th>Runtime</th><th>Error</th></tr></thead>
+    <tbody>{% for item in requests %}<tr>
+      <td class="mono">{{ item.record.id }}</td><td>{{ item.record.agent }}</td>
+      <td><span class="status {{ item.record.status }}">{{ item.record.status }}</span></td>
+      <td>{{ '%.2f' | format(item.duration) }}s</td><td class="error-text">{{ item.record.error or '—' }}</td>
+    </tr>{% else %}<tr><td colspan="5" class="muted">No requests.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>

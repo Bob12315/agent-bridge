@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Agent Bridge{% endblock %}</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Agent Bridge</a>
+    <span class="online"><span class="dot"></span> ONLINE</span>
+  </header>
+  <main class="shell">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

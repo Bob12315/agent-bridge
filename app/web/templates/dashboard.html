@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sessions · Agent Bridge{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">OPERATIONS CONSOLE</p>
+    <h1>Bridge Sessions</h1>
+    <p class="muted">Live communication state. Workflow decisions remain with ChatGPT.</p>
+  </div>
+  <button class="button secondary" onclick="location.reload()">Refresh</button>
+</section>
+
+{% if sessions %}
+<section class="session-grid">
+  {% for session in sessions %}
+  <a class="session-card" href="/sessions/{{ session.id }}">
+    <div class="card-row">
+      <span class="status {{ session.status }}">{{ session.status | upper }}</span>
+      <span class="mono muted">{{ session.id }}</span>
+    </div>
+    <h2>{{ session.project_name }}</h2>
+    <p class="mono branch">{{ session.current_branch }}</p>
+    <div class="card-row meta">
+      <span>Base: {{ session.base_branch }}</span>
+      <time>{{ session.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</time>
+    </div>
+  </a>
+  {% endfor %}
+</section>
+{% else %}
+<section class="empty-state">
+  <p class="eyebrow">NO ACTIVE SIGNAL</p>
+  <h2>No sessions yet</h2>
+  <p>Sessions created through the Bridge will appear here.</p>
+</section>
+{% endif %}
+{% endblock %}
