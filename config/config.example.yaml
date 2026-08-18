@@ -13,6 +13,9 @@ bridge:
 deepseek:
   enabled: false
   transport: "mock"
+  executable: "deepseek"
+  timeout_seconds: 1800
+  health_timeout_seconds: 15
 
 codex:
   enabled: false

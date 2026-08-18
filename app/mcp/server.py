@@ -9,7 +9,7 @@ from mcp.server import MCPServer
 
 from app import __version__
 from app.adapters.base import AgentAdapter
-from app.adapters.mock import MockAdapter
+from app.adapters.registry import build_adapter_registry
 from app.bridge.request_manager import RequestManager
 from app.bridge.router import Router
 from app.bridge.session_manager import SessionManager
@@ -26,13 +26,7 @@ def build_service(
     adapters: Mapping[str, AgentAdapter] | None = None,
 ) -> BridgeToolService:
     storage = database or Database(config.runtime.database)
-    registered_adapters = dict(
-        adapters
-        or {
-            "deepseek": MockAdapter("deepseek"),
-            "codex": MockAdapter("codex"),
-        }
-    )
+    registered_adapters = dict(adapters or build_adapter_registry(config))
     router = Router(registered_adapters, storage)
     requests = RequestManager(storage, router)
     sessions = SessionManager(storage, WorkspaceManager(config.runtime.workspace_root))

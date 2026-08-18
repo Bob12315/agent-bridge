@@ -19,6 +19,10 @@ class AgentTurnResult(BaseModel):
     external_session_id: str | None = None
 
 
+class AgentAdapterTimeout(RuntimeError):
+    """An Adapter's own execution deadline expired."""
+
+
 class AgentAdapter(ABC):
     @abstractmethod
     async def start(self, context: SessionContext) -> str | None: ...

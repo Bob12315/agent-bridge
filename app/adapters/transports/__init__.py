@@ -1,1 +1,1 @@
-"""Agent transport implementations are introduced in later stages."""
+"""Cross-platform Agent transport implementations."""

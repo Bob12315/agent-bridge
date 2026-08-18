@@ -25,6 +25,9 @@ class BridgeConfig(BaseModel):
 class AgentConfig(BaseModel):
     enabled: bool = False
     transport: str = "mock"
+    executable: str = "deepseek"
+    timeout_seconds: float = Field(default=1800, gt=0)
+    health_timeout_seconds: float = Field(default=15, gt=0)
 
 
 class WebConfig(BaseModel):

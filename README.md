@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前五个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard 和 MCP Server。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。真实 DeepSeek/Codex Adapter 将按后续阶段接入。
+当前完成前六个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server 和 DeepSeek Executor Adapter。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。真实 Codex Reviewer Adapter 将在下一阶段接入。
 
 ## 开发环境
 
@@ -70,3 +70,20 @@ bridge_close_session
 ```
 
 `bridge_send` 的输入中没有 `sender`、`id` 或 `created_at`；Bridge 会强制发送者为 ChatGPT 并生成其余字段。每次调用只执行目标 Agent 的一次 turn。`bridge_wait` 和 `bridge_status` 只观察已有请求，不会触发新的 Agent 调用。工具失败会返回稳定的 `error.code` 和 `error.message`，不会向客户端暴露内部 traceback。
+
+## DeepSeek Executor
+
+第六阶段通过独立的 CLI Transport 接入支持 DeepSeek 的终端执行器。默认命令为 `deepseek`，也可将 `executable` 改为兼容 Codewhale `exec --output-format stream-json` 协议的命令。执行器必须已完成 API Key 配置。
+
+配置示例：
+
+```yaml
+deepseek:
+  enabled: true
+  transport: "cli"
+  executable: "deepseek"
+  timeout_seconds: 1800
+  health_timeout_seconds: 15
+```
+
+每个 Bridge Session 会保持一个 Executor Session。第一次调用创建执行上下文，后续调用使用外部 Session ID 恢复；CLI 的 cwd 和 `--workspace` 都固定为该 Session 的 Git Worktree。执行使用参数数组而非 shell 字符串，并支持进程树取消、硬超时以及 `doctor --json` 健康检查。

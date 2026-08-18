@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.adapters.base import AgentAdapterTimeout
 from app.bridge.protocol import MessageEnvelope, new_id, utc_now
 from app.bridge.router import Router
 from app.bridge.session import SessionContext
@@ -201,11 +202,14 @@ class RequestManager:
                 )
         except asyncio.CancelledError:
             await self._mark_cancelled(request, agent_started=agent_started)
-        except AgentTurnTimeout:
-            timeout_message = (
-                f"{request.agent} did not respond within "
-                f"{self._agent_timeout_seconds} seconds."
-            )
+        except (AgentTurnTimeout, AgentAdapterTimeout) as exc:
+            if isinstance(exc, AgentTurnTimeout):
+                timeout_message = (
+                    f"{request.agent} did not respond within "
+                    f"{self._agent_timeout_seconds} seconds."
+                )
+            else:
+                timeout_message = f"{request.agent} timed out: {exc}"
             try:
                 await self._router.adapter_for(request.agent).cancel()
             except Exception as exc:

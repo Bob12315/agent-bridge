@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.adapters.mock import MockAdapter
+from app.adapters.registry import build_adapter_registry
 from app.bridge.request_manager import RequestManager
 from app.bridge.router import Router
 from app.config import AppConfig
@@ -28,13 +28,7 @@ def create_app(
     settings = config or AppConfig()
     storage = database or Database(settings.runtime.database)
     if request_manager is None:
-        bridge_router = Router(
-            {
-                "deepseek": MockAdapter("deepseek"),
-                "codex": MockAdapter("codex"),
-            },
-            storage,
-        )
+        bridge_router = Router(build_adapter_registry(settings), storage)
         request_manager = RequestManager(storage, bridge_router)
 
     @asynccontextmanager
