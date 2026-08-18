@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前七个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter 和 Codex Reviewer Adapter。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
+当前完成前八个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter、Codex Reviewer Adapter 和完整端到端链路验证。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
 
 ## 开发环境
 
@@ -102,3 +102,7 @@ codex:
 ```
 
 每个 `review_request` 都使用全新的临时 Reviewer Session，不恢复之前的审核会话。进程 cwd 与 `--cd` 都绑定当前 Session Worktree，并强制使用 `read-only` sandbox。Reviewer 会直接读取实际 Git 状态和 Diff，但不得修改、格式化或提交文件。最终结果由 JSON Schema 约束为 `PASS` 或 `CHANGES_REQUIRED`，并包含结构化问题列表；进程支持取消、硬超时和健康检查。
+
+## 完整链路与一跳约束
+
+第八阶段通过内存 MCP Client、真实 Session Worktree、Router、Request Manager 和 SQLite 验证完整返工链路：ChatGPT 显式调用 DeepSeek，显式调用 Codex，收到 `CHANGES_REQUIRED` 后再次显式调用 DeepSeek，最后显式调用 Codex 得到 `PASS`。每次 `bridge_send` 只增加一个 Request 和一个 Agent turn；`bridge_status` 只读取状态，审核结果不会触发隐藏的返工、复审或阶段推进。
