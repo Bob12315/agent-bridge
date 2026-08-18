@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前八个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter、Codex Reviewer Adapter 和完整端到端链路验证。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
+当前完成前九个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard、MCP Server、DeepSeek Executor Adapter、Codex Reviewer Adapter、完整端到端链路验证和 Windows 全面验证。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。
 
 ## 开发环境
 
@@ -106,3 +106,7 @@ codex:
 ## 完整链路与一跳约束
 
 第八阶段通过内存 MCP Client、真实 Session Worktree、Router、Request Manager 和 SQLite 验证完整返工链路：ChatGPT 显式调用 DeepSeek，显式调用 Codex，收到 `CHANGES_REQUIRED` 后再次显式调用 DeepSeek，最后显式调用 Codex 得到 `PASS`。每次 `bridge_send` 只增加一个 Request 和一个 Agent turn；`bridge_status` 只读取状态，审核结果不会触发隐藏的返工、复审或阶段推进。
+
+## Windows 验证
+
+第九阶段在原生 Windows 环境完成全栈验证，覆盖带空格路径下的 Git Worktree、DeepSeek/Codex CLI Adapter、取消与进程树终止、硬超时、SQLite 持久化、服务对象重建后的请求恢复、独立 Uvicorn 进程启动、Dashboard 和 SSE。Windows 专用回归测试位于 `tests/test_windows_validation.py`；非 Windows 环境会跳过该测试，不影响其他跨平台测试。
