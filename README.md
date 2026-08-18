@@ -2,7 +2,7 @@
 
 Agent Bridge 是 ChatGPT Web、DeepSeek Executor 与 Codex Reviewer 之间的跨平台通信中间层。Bridge 只验证、保存和转发消息；所有阶段、轮次、返工与推进决策均由 ChatGPT 明确发起。
 
-当前完成前三个阶段：Foundation、Session + Git Workspace，以及 Async Request Manager。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消和跨平台进程树管理。Web UI、MCP 及真实 Agent Adapter 将按后续阶段实现。
+当前完成前五个阶段：Foundation、Session + Git Workspace、Async Request Manager、Web Dashboard 和 MCP Server。系统现在支持请求快速路径、后台执行、状态查询、等待、失败处理、取消、跨平台进程树管理，以及通过 MCP 进行完整的一跳通信。真实 DeepSeek/Codex Adapter 将按后续阶段接入。
 
 ## 开发环境
 
@@ -43,3 +43,30 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 浏览器打开 `http://127.0.0.1:8000`。Dashboard 提供 Session 列表、Agent 状态、显式 Stage/Round、当前活动、Message/Event 时间线、请求耗时、错误详情和 Cancel 操作。`/api/events` 提供 SSE 实时事件流；页面也保留低频刷新作为连接中断时的回退。
+
+## MCP Server
+
+本地 MCP Host 默认通过 stdio 启动 Bridge：
+
+```text
+python -m app.mcp.server --config config/config.example.yaml
+```
+
+需要通过网络连接时，可启动 Streamable HTTP：
+
+```text
+python -m app.mcp.server --config config/config.example.yaml --transport streamable-http
+```
+
+默认端点为 `http://127.0.0.1:8001/mcp`，可在配置文件的 `mcp` 部分修改。V1 只暴露以下六个工具：
+
+```text
+bridge_create_session
+bridge_send
+bridge_wait
+bridge_status
+bridge_cancel
+bridge_close_session
+```
+
+`bridge_send` 的输入中没有 `sender`、`id` 或 `created_at`；Bridge 会强制发送者为 ChatGPT 并生成其余字段。每次调用只执行目标 Agent 的一次 turn。`bridge_wait` 和 `bridge_status` 只观察已有请求，不会触发新的 Agent 调用。工具失败会返回稳定的 `error.code` 和 `error.message`，不会向客户端暴露内部 traceback。

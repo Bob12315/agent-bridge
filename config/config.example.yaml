@@ -20,3 +20,9 @@ codex:
 
 web:
   enabled: true
+
+mcp:
+  transport: "stdio"
+  host: "127.0.0.1"
+  port: 8001
+  path: "/mcp"

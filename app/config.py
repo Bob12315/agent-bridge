@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,6 +31,13 @@ class WebConfig(BaseModel):
     enabled: bool = True
 
 
+class McpConfig(BaseModel):
+    transport: Literal["stdio", "streamable-http"] = "stdio"
+    host: str = "127.0.0.1"
+    port: int = Field(default=8001, ge=1, le=65535)
+    path: str = Field(default="/mcp", pattern=r"^/")
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -39,6 +47,7 @@ class AppConfig(BaseModel):
     deepseek: AgentConfig = Field(default_factory=AgentConfig)
     codex: AgentConfig = Field(default_factory=AgentConfig)
     web: WebConfig = Field(default_factory=WebConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 
 
 def load_config(path: Path) -> AppConfig:
