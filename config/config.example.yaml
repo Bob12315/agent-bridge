@@ -14,6 +14,8 @@ deepseek:
   enabled: false
   transport: "mock"
   executable: "deepseek"
+  # command_prefix: ["cmd", "/c"]
+  command_prefix: []
   timeout_seconds: 1800
   health_timeout_seconds: 15
 
@@ -21,6 +23,8 @@ codex:
   enabled: false
   transport: "mock"
   executable: "codex"
+  # command_prefix: ["cmd", "/c"]
+  command_prefix: []
   timeout_seconds: 1800
   health_timeout_seconds: 15
 

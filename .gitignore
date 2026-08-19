@@ -10,3 +10,9 @@ runtime/logs/*
 runtime/workspaces/*
 !runtime/logs/.gitkeep
 !runtime/workspaces/.gitkeep
+runtime/*.py
+runtime/*.ps1
+runtime/*.xml
+runtime/HANDOFF_NOTES.md
+config/config.local.yaml
+tools/

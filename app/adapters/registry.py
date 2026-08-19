@@ -16,6 +16,7 @@ def build_adapter_registry(config: AppConfig) -> dict[str, AgentAdapter]:
         deepseek = DeepSeekAdapter(
             DeepSeekCLITransport(
                 executable=config.deepseek.executable,
+                command_prefix=tuple(config.deepseek.command_prefix),
                 timeout_seconds=config.deepseek.timeout_seconds,
                 health_timeout_seconds=config.deepseek.health_timeout_seconds,
             )
@@ -30,6 +31,7 @@ def build_adapter_registry(config: AppConfig) -> dict[str, AgentAdapter]:
         codex = CodexAdapter(
             CodexCLITransport(
                 executable=config.codex.executable,
+                command_prefix=tuple(config.codex.command_prefix),
                 timeout_seconds=config.codex.timeout_seconds,
                 health_timeout_seconds=config.codex.health_timeout_seconds,
             )
