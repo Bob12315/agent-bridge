@@ -1,16 +1,23 @@
 {% extends "base.html" %}
-{% block title %}{{ agent_session.agent | capitalize }} · Agent Bridge{% endblock %}
+{% block title %}{{ {'deepseek': 'DeepSeek', 'codex': 'Codex'}.get(agent_session.agent, agent_session.agent | capitalize) }} · Agent Bridge{% endblock %}
+{% set status_labels = {
+  'active': '进行中', 'closed': '已关闭', 'error': '错误',
+  'idle': '空闲', 'busy': '忙碌',
+  'queued': '排队中', 'running': '运行中', 'completed': '已完成',
+  'failed': '失败', 'cancelled': '已取消',
+  'connected': '已连接', 'unknown': '未知'
+} %}
 {% block content %}
-<div class="crumbs"><a href="/">Sessions</a><span>/</span><a href="/sessions/{{ session.id }}">{{ session.id }}</a><span>/</span><span>{{ agent_session.agent }}</span></div>
+<div class="crumbs"><a href="/">会话</a><span>/</span><a href="/sessions/{{ session.id }}">{{ session.id }}</a><span>/</span><span>{{ {'deepseek': 'DeepSeek', 'codex': 'Codex'}.get(agent_session.agent, agent_session.agent) }}</span></div>
 <section class="page-heading">
-  <div><p class="eyebrow">AGENT DETAIL</p><h1>{{ agent_session.agent | capitalize }}</h1><p class="mono muted">{{ agent_session.external_session_id or 'No external session' }}</p></div>
-  <span class="status {{ agent_session.status }}">{{ agent_session.status | upper }}</span>
+  <div><p class="eyebrow">智能体详情</p><h1>{{ {'deepseek': 'DeepSeek', 'codex': 'Codex'}.get(agent_session.agent, agent_session.agent | capitalize) }}</h1><p class="mono muted">{{ agent_session.external_session_id or '无外部会话' }}</p></div>
+  <span class="status {{ agent_session.status }}">{{ status_labels.get(agent_session.status, agent_session.status | upper) }}</span>
 </section>
 <section class="panel">
-  <div class="section-title"><h2>Request History</h2><span>{{ requests | length }}</span></div>
+  <div class="section-title"><h2>请求历史</h2><span>{{ requests | length }}</span></div>
   <div class="table-wrap"><table>
-    <thead><tr><th>ID</th><th>Status</th><th>Queued</th><th>Finished</th><th>Error</th></tr></thead>
-    <tbody>{% for item in requests %}<tr><td class="mono">{{ item.id }}</td><td><span class="status {{ item.status }}">{{ item.status }}</span></td><td>{{ item.queued_at.strftime('%H:%M:%S') }}</td><td>{{ item.finished_at.strftime('%H:%M:%S') if item.finished_at else '—' }}</td><td class="error-text">{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No requests for this agent.</td></tr>{% endfor %}</tbody>
+    <thead><tr><th>ID</th><th>状态</th><th>排队时间</th><th>完成时间</th><th>错误</th></tr></thead>
+    <tbody>{% for item in requests %}<tr><td class="mono">{{ item.id }}</td><td><span class="status {{ item.status }}">{{ status_labels.get(item.status, item.status) }}</span></td><td>{{ item.queued_at.strftime('%H:%M:%S') }}</td><td>{{ item.finished_at.strftime('%H:%M:%S') if item.finished_at else '—' }}</td><td class="error-text">{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">该智能体暂无请求。</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>
 {% endblock %}

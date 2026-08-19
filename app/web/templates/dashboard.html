@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Sessions · Agent Bridge{% endblock %}
+{% block title %}会话 · Agent Bridge{% endblock %}
 {% block content %}
+{% set status_labels = {'active': '进行中', 'closed': '已关闭', 'error': '错误'} %}
 <section class="page-heading">
   <div>
-    <p class="eyebrow">OPERATIONS CONSOLE</p>
-    <h1>Bridge Sessions</h1>
-    <p class="muted">Live communication state. Workflow decisions remain with ChatGPT.</p>
+    <p class="eyebrow">运营控制台</p>
+    <h1>Bridge 会话</h1>
+    <p class="muted">实时通信状态。工作流决策仍由 ChatGPT 负责。</p>
   </div>
-  <button class="button secondary" onclick="location.reload()">Refresh</button>
+  <button class="button secondary" onclick="location.reload()">刷新</button>
 </section>
 
 {% if sessions %}
@@ -15,13 +16,13 @@
   {% for session in sessions %}
   <a class="session-card" href="/sessions/{{ session.id }}">
     <div class="card-row">
-      <span class="status {{ session.status }}">{{ session.status | upper }}</span>
+      <span class="status {{ session.status }}">{{ status_labels.get(session.status, session.status) }}</span>
       <span class="mono muted">{{ session.id }}</span>
     </div>
     <h2>{{ session.project_name }}</h2>
     <p class="mono branch">{{ session.current_branch }}</p>
     <div class="card-row meta">
-      <span>Base: {{ session.base_branch }}</span>
+      <span>基分支：{{ session.base_branch }}</span>
       <time>{{ session.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</time>
     </div>
   </a>
@@ -29,9 +30,9 @@
 </section>
 {% else %}
 <section class="empty-state">
-  <p class="eyebrow">NO ACTIVE SIGNAL</p>
-  <h2>No sessions yet</h2>
-  <p>Sessions created through the Bridge will appear here.</p>
+  <p class="eyebrow">暂无活动信号</p>
+  <h2>暂无会话</h2>
+  <p>通过 Bridge 创建的会话将显示在这里。</p>
 </section>
 {% endif %}
 {% endblock %}
