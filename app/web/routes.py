@@ -80,11 +80,15 @@ async def health() -> dict[str, str]:
 
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    sessions = await _database(request).list_sessions()
+    database = _database(request)
+    sessions = await database.list_sessions()
+    projects = []
+    for project in await database.list_projects():
+        projects.append({"project": project, "tasks": await database.list_tasks(project.id)})
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"sessions": sessions},
+        context={"sessions": sessions, "projects": projects},
     )
 
 

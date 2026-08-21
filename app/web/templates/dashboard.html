@@ -11,6 +11,23 @@
   <button class="button secondary" onclick="location.reload()">刷新</button>
 </section>
 
+{% if projects %}
+<section class="panel">
+  <div class="section-title"><h2>Projects / 项目</h2><span>{{ projects | length }}</span></div>
+  <div class="session-grid">
+  {% for item in projects %}
+    <article class="session-card">
+      <div class="card-row"><span class="status active">Project</span><span class="mono muted">{{ item.project.id }}</span></div>
+      <h2>{{ item.project.name }}</h2>
+      <p class="mono branch">{{ item.project.default_branch }}</p>
+      <p class="muted">{{ item.tasks | length }} Task(s)</p>
+      {% for task in item.tasks %}<p><a href="/sessions/{{ task.bridge_session_id }}">{{ task.task_name }}</a> <span class="status {{ task.status }}">{{ task.status }}</span></p>{% endfor %}
+    </article>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 {% if sessions %}
 <section class="session-grid">
   {% for session in sessions %}
@@ -31,7 +48,7 @@
 {% else %}
 <section class="empty-state">
   <p class="eyebrow">暂无活动信号</p>
-  <h2>暂无会话</h2>
+  <h2>No sessions yet / 暂无会话</h2>
   <p>通过 Bridge 创建的会话将显示在这里。</p>
 </section>
 {% endif %}

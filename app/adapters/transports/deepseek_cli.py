@@ -66,6 +66,12 @@ class DeepSeekCLITransport(DeepSeekTransport):
         self._sessions[session_id] = _ExecutorSession(workspace=resolved)
         return session_id
 
+    async def restore_session(self, workspace: Path, external_session_id: str) -> str:
+        """Rebuild a disposable local handle around a persisted harness session."""
+        session_id = await self.create_session(workspace)
+        self._sessions[session_id].external_session_id = external_session_id
+        return session_id
+
     async def send(self, session_id: str, prompt: str) -> str:
         session = self._require_session(session_id)
         return await self._run(session_id, session, prompt)

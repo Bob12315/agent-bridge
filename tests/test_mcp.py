@@ -130,6 +130,17 @@ async def test_mcp_server_exposes_capability_tools_and_runs_in_memory(
             "bridge_status",
             "bridge_cancel",
             "bridge_close_session",
+            "bridge_add_project",
+            "bridge_list_projects",
+            "bridge_get_project",
+            "bridge_create_task",
+            "bridge_list_tasks",
+            "bridge_get_task",
+            "bridge_recover_task",
+            "bridge_transition_task",
+            "bridge_git_preflight",
+            "bridge_git_apply",
+            "bridge_git_discard",
         }
         send_tool = next(
             tool for tool in listed.tools if tool.name == "bridge_send"

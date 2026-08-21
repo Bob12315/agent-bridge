@@ -40,6 +40,34 @@ class Router:
         if adapter is None:
             raise RoutingError(f"no adapter registered for {message.receiver}")
 
+        agent_session = await self._database.get_agent_session(context.id, message.receiver)
+        restore = getattr(adapter, "restore", None)
+        if agent_session and agent_session.external_session_id and callable(restore):
+            try:
+                await restore(context, agent_session.external_session_id)
+                await self._database.update_agent_session_status(
+                    context.id, message.receiver, "resuming"
+                )
+                await self._database.insert_event(
+                    EventRecord(
+                        id=new_id("evt"), session_id=context.id, request_id=request_id,
+                        agent=message.receiver, type="AGENT_SESSION_RESUMED",
+                        message=f"Resumed persisted {message.receiver} session",
+                    )
+                )
+            except Exception as exc:
+                await self._database.update_agent_session_status(
+                    context.id, message.receiver, "degraded"
+                )
+                await self._database.insert_event(
+                    EventRecord(
+                        id=new_id("evt"), session_id=context.id, request_id=request_id,
+                        agent=message.receiver, type="SESSION_RESUME_FAILED",
+                        message=f"Could not resume persisted session: {exc}",
+                    )
+                )
+                raise RoutingError("SESSION_RESUME_FAILED") from exc
+
         if store_incoming:
             await self._database.insert_message(message)
         await self._database.insert_event(
@@ -70,6 +98,13 @@ class Router:
         if response.reply_to != message.id:
             raise RoutingError("adapter response must reply to the routed message")
 
+        if result.external_session_id:
+            await self._database.update_agent_session_external(
+                context.id,
+                message.receiver,
+                result.external_session_id,
+                backend=result.backend or type(adapter).__name__,
+            )
         await self._database.insert_message(response)
         return response
 

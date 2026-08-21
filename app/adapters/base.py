@@ -17,6 +17,7 @@ class AgentHealth(BaseModel):
 class AgentTurnResult(BaseModel):
     response: MessageEnvelope
     external_session_id: str | None = None
+    backend: str | None = None
 
 
 class AgentAdapterTimeout(RuntimeError):

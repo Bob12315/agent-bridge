@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -22,10 +23,15 @@ from app.bridge.request_manager import (
     RequestManager,
     RequestManagerError,
 )
+from app.bridge.projects import ProjectError, ProjectManager
+from app.bridge.git_lifecycle import GitLifecycleError, GitLifecycleManager, GitPreflight
+from app.bridge.recovery import RecoveryError, RecoveryManager
 from app.bridge.router import RoutingError
+from app.bridge.session import SessionContext
 from app.bridge.session_manager import SessionError, SessionManager
 from app.runtime.workspace import WorkspaceError
 from app.storage.database import Database
+from app.storage.models import ProjectRecord, TaskRecord
 
 logger = logging.getLogger(__name__)
 Receiver = Literal["deepseek", "codex"]
@@ -62,6 +68,27 @@ class InspectToolResult(BaseModel):
     error: BridgeError | None = None
 
 
+class ProjectToolResult(BaseModel):
+    status: Literal["completed", "failed"]
+    project: ProjectRecord | None = None
+    projects: list[ProjectRecord] = Field(default_factory=list)
+    error: BridgeError | None = None
+
+
+class TaskToolResult(BaseModel):
+    status: Literal["completed", "failed"]
+    task: TaskRecord | None = None
+    tasks: list[TaskRecord] = Field(default_factory=list)
+    session: SessionContext | None = None
+    error: BridgeError | None = None
+
+
+class GitToolResult(BaseModel):
+    status: Literal["completed", "failed"]
+    preflight: dict[str, object] | None = None
+    error: BridgeError | None = None
+
+
 class BridgeToolService:
     """MCP operations with no workflow or automatic second-hop behavior."""
 
@@ -70,11 +97,15 @@ class BridgeToolService:
         database: Database,
         sessions: SessionManager,
         requests: RequestManager,
+        projects: ProjectManager | None = None,
         synchronous_wait_seconds: float = 30,
     ) -> None:
         self.database = database
         self.sessions = sessions
         self.requests = requests
+        self.projects = projects or ProjectManager(database, sessions)
+        self.git = GitLifecycleManager(database)
+        self.recovery = RecoveryManager(database, self.projects)
         self.synchronous_wait_seconds = synchronous_wait_seconds
         self.inspector = WorkspaceInspector()
 
@@ -105,6 +136,120 @@ class BridgeToolService:
         except Exception as exc:
             return CreateSessionToolResult(status="failed", error=self._error(exc))
 
+    async def bridge_add_project(
+        self, name: str, repo_path: str, default_branch: str = "main"
+    ) -> ProjectToolResult:
+        try:
+            return ProjectToolResult(
+                status="completed",
+                project=await self.projects.add_project(name, Path(repo_path), default_branch),
+            )
+        except Exception as exc:
+            return ProjectToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_list_projects(self) -> ProjectToolResult:
+        try:
+            return ProjectToolResult(
+                status="completed", projects=await self.database.list_projects()
+            )
+        except Exception as exc:
+            return ProjectToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_get_project(self, project_id: str) -> ProjectToolResult:
+        try:
+            project = await self.database.get_project(project_id)
+            if project is None:
+                raise ProjectError(f"project not found: {project_id}")
+            return ProjectToolResult(status="completed", project=project)
+        except Exception as exc:
+            return ProjectToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_create_task(
+        self,
+        project_id: str,
+        task_name: str,
+        access_mode: Literal["inspect", "develop", "review"] = "develop",
+    ) -> TaskToolResult:
+        try:
+            task, session = await self.projects.create_task(project_id, task_name, access_mode)
+            return TaskToolResult(status="completed", task=task, session=session)
+        except Exception as exc:
+            return TaskToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_list_tasks(self, project_id: str) -> TaskToolResult:
+        try:
+            return TaskToolResult(
+                status="completed", tasks=await self.database.list_tasks(project_id)
+            )
+        except Exception as exc:
+            return TaskToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_get_task(self, task_id: str) -> TaskToolResult:
+        try:
+            task = await self.database.get_task(task_id)
+            if task is None:
+                raise ProjectError(f"task not found: {task_id}")
+            session = await self.database.get_session(task.bridge_session_id)
+            return TaskToolResult(status="completed", task=task, session=session)
+        except Exception as exc:
+            return TaskToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_recover_task(self, task_id: str) -> TaskToolResult:
+        try:
+            task = await self.recovery.recover_task(task_id)
+            session = await self.database.get_session(task.bridge_session_id)
+            return TaskToolResult(status="completed", task=task, session=session)
+        except Exception as exc:
+            return TaskToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_transition_task(
+        self,
+        task_id: str,
+        status: Literal["active", "completed", "archived", "error", "recovery"],
+    ) -> TaskToolResult:
+        try:
+            task = await self.projects.transition_task(task_id, status)
+            session = await self.database.get_session(task.bridge_session_id)
+            return TaskToolResult(status="completed", task=task, session=session)
+        except Exception as exc:
+            return TaskToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_git_preflight(
+        self, session_id: str, operation: Literal["apply", "discard"]
+    ) -> GitToolResult:
+        try:
+            session = await self.database.get_session(session_id)
+            if session is None:
+                raise SessionError(f"session not found: {session_id}")
+            preflight = await self.git.preflight(session, operation)
+            return GitToolResult(status="completed", preflight=asdict(preflight))
+        except Exception as exc:
+            return GitToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_git_apply(
+        self, session_id: str, confirmation_id: str, expected_base_commit: str
+    ) -> GitToolResult:
+        try:
+            session = await self.database.get_session(session_id)
+            if session is None:
+                raise SessionError(f"session not found: {session_id}")
+            await self.git.apply(session, confirmation_id, expected_base_commit)
+            return GitToolResult(status="completed")
+        except Exception as exc:
+            return GitToolResult(status="failed", error=self._error(exc))
+
+    async def bridge_git_discard(
+        self, session_id: str, confirmation_id: str, expected_base_commit: str
+    ) -> GitToolResult:
+        try:
+            session = await self.database.get_session(session_id)
+            if session is None:
+                raise SessionError(f"session not found: {session_id}")
+            await self.git.discard(session, confirmation_id, expected_base_commit)
+            return GitToolResult(status="completed")
+        except Exception as exc:
+            return GitToolResult(status="failed", error=self._error(exc))
+
     async def bridge_send(
         self,
         session_id: str,
@@ -116,6 +261,7 @@ class BridgeToolService:
         stage: Annotated[int | None, Field(ge=1)] = None,
         round: Annotated[int | None, Field(ge=1)] = None,
         reply_to: str | None = None,
+        request_id: str | None = None,
     ) -> RequestToolResult:
         try:
             if receiver not in {"deepseek", "codex"}:
@@ -143,6 +289,7 @@ class BridgeToolService:
                 message,
                 session,
                 synchronous_wait_seconds=self.synchronous_wait_seconds,
+                request_id=request_id,
             )
             return self._request_result(result)
         except Exception as exc:
@@ -249,8 +396,14 @@ class BridgeToolService:
             code = "SESSION_NOT_FOUND" if "not found" in str(exc) else "SESSION_ERROR"
         elif isinstance(exc, RequestManagerError):
             code = "REQUEST_NOT_FOUND" if "not found" in str(exc) else "REQUEST_ERROR"
+        elif isinstance(exc, ProjectError):
+            code = "PROJECT_NOT_FOUND" if "not found" in str(exc) else "PROJECT_ERROR"
+        elif isinstance(exc, RecoveryError):
+            code = "RECOVERY_ERROR"
         elif isinstance(exc, RoutingError):
             code = "ROUTING_ERROR"
+        elif isinstance(exc, GitLifecycleError):
+            code = exc.code
         elif isinstance(exc, ValueError):
             code = "INVALID_ARGUMENT"
         else:

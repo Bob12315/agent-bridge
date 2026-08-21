@@ -16,12 +16,14 @@ class SessionContext(BaseModel):
 
     id: str
     project_name: str = Field(min_length=1)
+    project_id: str | None = None
+    task_name: str | None = None
     workspace: Path
     base_branch: str
     current_branch: str
     base_commit: str | None = None
     access_mode: AccessMode = "inspect"
-    status: Literal["active", "closed", "error"] = "active"
+    status: Literal["draft", "active", "completed", "archived", "closed", "error", "recovery"] = "active"
     current_task_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -33,5 +35,8 @@ class AgentSession(BaseModel):
     id: str
     bridge_session_id: str
     agent: AgentName
+    backend: str | None = None
     external_session_id: str | None = None
-    status: Literal["idle", "busy", "error", "closed"] = "idle"
+    status: Literal[
+        "unbound", "creating", "ready", "idle", "busy", "resuming", "degraded", "replaced", "error", "closed"
+    ] = "idle"

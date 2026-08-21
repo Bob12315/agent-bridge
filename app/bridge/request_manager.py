@@ -59,6 +59,7 @@ class RequestManager:
         message: MessageEnvelope,
         context: SessionContext,
         synchronous_wait_seconds: float = 30,
+        request_id: str | None = None,
     ) -> BridgeRequestResult:
         if synchronous_wait_seconds < 0:
             raise RequestManagerError("synchronous wait must not be negative")
@@ -68,8 +69,17 @@ class RequestManager:
             raise RequestManagerError("message and context session IDs do not match")
         self._router.adapter_for(message.receiver)
 
+        if request_id is not None:
+            existing = await self._database.get_request(request_id)
+            if existing is not None:
+                if existing.session_id != context.id or existing.agent != message.receiver:
+                    raise RequestManagerError(
+                        "request_id is already bound to a different task or agent"
+                    )
+                return await self.status(request_id)
+
         request = RequestRecord(
-            id=new_id("req"),
+            id=request_id or new_id("req"),
             message_id=message.id,
             session_id=context.id,
             agent=message.receiver,

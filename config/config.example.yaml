@@ -18,6 +18,10 @@ deepseek:
   command_prefix: []
   timeout_seconds: 1800
   health_timeout_seconds: 15
+  # Set transport to "dsh-plugin" to prefer the local agent-bridge-dsh plugin.
+  # The CLI adapter remains the automatic fallback if the plugin is unavailable.
+  plugin_endpoint: "http://127.0.0.1:8765"
+  plugin_token: null
 
 codex:
   enabled: false

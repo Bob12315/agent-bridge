@@ -42,6 +42,18 @@ class DeepSeekAdapter(AgentAdapter):
         self._sessions[context.id] = session_id
         return session_id
 
+    async def restore(self, context: SessionContext, external_session_id: str) -> str:
+        """Hydrate the process-local adapter cache from Bridge persistence."""
+        existing = self._sessions.get(context.id)
+        if existing is not None:
+            return existing
+        restore = getattr(self._transport, "restore_session", None)
+        if restore is None:
+            raise RuntimeError("configured DeepSeek backend cannot resume persisted sessions")
+        session_id = await restore(context.workspace, external_session_id)
+        self._sessions[context.id] = session_id
+        return session_id
+
     async def send(
         self, message: MessageEnvelope, context: SessionContext
     ) -> AgentTurnResult:

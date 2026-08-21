@@ -3,6 +3,8 @@ from __future__ import annotations
 from app.adapters.base import AgentAdapter
 from app.adapters.codex import CodexAdapter
 from app.adapters.deepseek import DeepSeekAdapter
+from app.adapters.fallback import FallbackAdapter
+from app.adapters.transports.dsh_plugin import DshPluginTransport
 from app.adapters.mock import MockAdapter
 from app.adapters.transports.codex_cli import CodexCLITransport
 from app.adapters.transports.deepseek_cli import DeepSeekCLITransport
@@ -21,6 +23,23 @@ def build_adapter_registry(config: AppConfig) -> dict[str, AgentAdapter]:
                 health_timeout_seconds=config.deepseek.health_timeout_seconds,
             )
         )
+    elif config.deepseek.transport == "dsh-plugin":
+        primary = DeepSeekAdapter(
+            DshPluginTransport(
+                config.deepseek.plugin_endpoint,
+                config.deepseek.plugin_token,
+                config.deepseek.health_timeout_seconds,
+            )
+        )
+        fallback = DeepSeekAdapter(
+            DeepSeekCLITransport(
+                executable=config.deepseek.executable,
+                command_prefix=tuple(config.deepseek.command_prefix),
+                timeout_seconds=config.deepseek.timeout_seconds,
+                health_timeout_seconds=config.deepseek.health_timeout_seconds,
+            )
+        )
+        deepseek = FallbackAdapter(primary, fallback)
     else:
         raise ValueError(
             f"unsupported DeepSeek transport: {config.deepseek.transport}"

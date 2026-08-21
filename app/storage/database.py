@@ -7,7 +7,7 @@ import aiosqlite
 
 from app.bridge.protocol import MessageEnvelope
 from app.bridge.session import AgentSession, SessionContext
-from app.storage.models import EventRecord, RequestRecord
+from app.storage.models import EventRecord, ProjectRecord, RequestRecord, TaskRecord
 
 
 class Database:
@@ -23,6 +23,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     project_name TEXT NOT NULL,
+                    project_id TEXT,
+                    task_name TEXT,
                     workspace TEXT NOT NULL,
                     base_branch TEXT NOT NULL,
                     current_branch TEXT NOT NULL,
@@ -37,6 +39,7 @@ class Database:
                     id TEXT PRIMARY KEY,
                     bridge_session_id TEXT NOT NULL REFERENCES sessions(id),
                     agent TEXT NOT NULL,
+                    backend TEXT,
                     external_session_id TEXT,
                     status TEXT NOT NULL,
                     UNIQUE(bridge_session_id, agent)
@@ -67,6 +70,34 @@ class Database:
                     error_code TEXT,
                     error TEXT
                 );
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    repo_path TEXT NOT NULL UNIQUE,
+                    default_branch TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL REFERENCES projects(id),
+                    task_name TEXT NOT NULL,
+                    bridge_session_id TEXT NOT NULL UNIQUE REFERENCES sessions(id),
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(project_id, task_name)
+                );
+                CREATE TABLE IF NOT EXISTS git_operations (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL REFERENCES sessions(id),
+                    operation TEXT NOT NULL,
+                    confirmation_id TEXT,
+                    expected_base_commit TEXT,
+                    status TEXT NOT NULL,
+                    detail_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY,
                     session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -80,6 +111,12 @@ class Database:
                     ON messages(session_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_events_session_created
                     ON events(session_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_agent_sessions_external
+                    ON agent_sessions(external_session_id);
+                CREATE INDEX IF NOT EXISTS idx_tasks_project_status
+                    ON tasks(project_id, status);
+                CREATE INDEX IF NOT EXISTS idx_requests_session_status
+                    ON requests(session_id, status);
                 """
             )
             columns = {
@@ -93,6 +130,17 @@ class Database:
                 await connection.execute(
                     "ALTER TABLE sessions ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'inspect'"
                 )
+            if "project_id" not in columns:
+                await connection.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT")
+            if "task_name" not in columns:
+                await connection.execute("ALTER TABLE sessions ADD COLUMN task_name TEXT")
+            agent_columns = {
+                row[1]
+                for row in await (await connection.execute("PRAGMA table_info(agent_sessions)"))
+                .fetchall()
+            }
+            if "backend" not in agent_columns:
+                await connection.execute("ALTER TABLE agent_sessions ADD COLUMN backend TEXT")
             request_columns = {
                 row[1]
                 for row in await (await connection.execute("PRAGMA table_info(requests)"))
@@ -110,11 +158,11 @@ class Database:
         async with aiosqlite.connect(self.path) as connection:
             await connection.execute(
                 """INSERT INTO sessions
-                (id, project_name, workspace, base_branch, current_branch,
+                (id, project_name, project_id, task_name, workspace, base_branch, current_branch,
                  base_commit, access_mode, status, current_task_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    session.id, session.project_name, str(session.workspace),
+                    session.id, session.project_name, session.project_id, session.task_name, str(session.workspace),
                     session.base_branch, session.current_branch, session.base_commit,
                     session.access_mode,
                     session.status, session.current_task_id, session.created_at.isoformat(),
@@ -134,12 +182,14 @@ class Database:
             await connection.execute("PRAGMA foreign_keys = ON")
             await connection.execute(
                 """INSERT INTO sessions
-                (id, project_name, workspace, base_branch, current_branch,
+                (id, project_name, project_id, task_name, workspace, base_branch, current_branch,
                  base_commit, access_mode, status, current_task_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     session.id,
                     session.project_name,
+                    session.project_id,
+                    session.task_name,
                     str(session.workspace),
                     session.base_branch,
                     session.current_branch,
@@ -152,12 +202,15 @@ class Database:
                 ),
             )
             await connection.executemany(
-                "INSERT INTO agent_sessions VALUES (?, ?, ?, ?, ?)",
+                """INSERT INTO agent_sessions
+                (id, bridge_session_id, agent, backend, external_session_id, status)
+                VALUES (?, ?, ?, ?, ?, ?)""",
                 [
                     (
                         item.id,
                         item.bridge_session_id,
                         item.agent,
+                        item.backend,
                         item.external_session_id,
                         item.status,
                     )
@@ -197,8 +250,10 @@ class Database:
     async def insert_agent_session(self, session: AgentSession) -> None:
         async with aiosqlite.connect(self.path) as connection:
             await connection.execute(
-                "INSERT INTO agent_sessions VALUES (?, ?, ?, ?, ?)",
-                (session.id, session.bridge_session_id, session.agent, session.external_session_id, session.status),
+                """INSERT INTO agent_sessions
+                (id, bridge_session_id, agent, backend, external_session_id, status)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                (session.id, session.bridge_session_id, session.agent, session.backend, session.external_session_id, session.status),
             )
             await connection.commit()
 
@@ -240,6 +295,164 @@ class Database:
                 )
             await connection.commit()
 
+    async def update_agent_session_external(
+        self,
+        bridge_session_id: str,
+        agent: str,
+        external_session_id: str | None,
+        *,
+        backend: str | None = None,
+        status: str = "ready",
+    ) -> None:
+        """Persist the external mapping after a successful adapter turn.
+
+        The mapping is the recovery source of truth; adapter in-memory caches are
+        intentionally treated as disposable.
+        """
+        async with aiosqlite.connect(self.path) as connection:
+            cursor = await connection.execute(
+                """UPDATE agent_sessions
+                SET external_session_id = ?, backend = COALESCE(?, backend), status = ?
+                WHERE bridge_session_id = ? AND agent = ?""",
+                (external_session_id, backend, status, bridge_session_id, agent),
+            )
+            if cursor.rowcount != 1:
+                raise LookupError(
+                    f"agent session not found: {bridge_session_id}/{agent}"
+                )
+            await connection.commit()
+
+    async def upsert_project(self, project: ProjectRecord) -> ProjectRecord:
+        async with aiosqlite.connect(self.path) as connection:
+            await connection.execute("PRAGMA foreign_keys = ON")
+            await connection.execute(
+                """INSERT INTO projects
+                (id, name, repo_path, default_branch, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                  repo_path = excluded.repo_path,
+                  default_branch = excluded.default_branch,
+                  updated_at = excluded.updated_at""",
+                (
+                    project.id,
+                    project.name,
+                    project.repo_path,
+                    project.default_branch,
+                    project.created_at.isoformat(),
+                    project.updated_at.isoformat(),
+                ),
+            )
+            await connection.commit()
+            connection.row_factory = aiosqlite.Row
+            row = await (
+                await connection.execute("SELECT * FROM projects WHERE name = ?", (project.name,))
+            ).fetchone()
+        return ProjectRecord.model_validate(dict(row))
+
+    async def get_project(self, project_id: str) -> ProjectRecord | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            row = await (
+                await connection.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
+            ).fetchone()
+        return ProjectRecord.model_validate(dict(row)) if row else None
+
+    async def list_projects(self, limit: int = 100) -> list[ProjectRecord]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            rows = await (
+                await connection.execute(
+                    "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ?", (limit,)
+                )
+            ).fetchall()
+        return [ProjectRecord.model_validate(dict(row)) for row in rows]
+
+    async def insert_task(self, task: TaskRecord) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            await connection.execute("PRAGMA foreign_keys = ON")
+            await connection.execute(
+                """INSERT INTO tasks
+                (id, project_id, task_name, bridge_session_id, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    task.id,
+                    task.project_id,
+                    task.task_name,
+                    task.bridge_session_id,
+                    task.status,
+                    task.created_at.isoformat(),
+                    task.updated_at.isoformat(),
+                ),
+            )
+            await connection.commit()
+
+    async def get_task(self, task_id: str) -> TaskRecord | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            row = await (await connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))).fetchone()
+        return TaskRecord.model_validate(dict(row)) if row else None
+
+    async def get_task_for_session(self, session_id: str) -> TaskRecord | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            row = await (
+                await connection.execute(
+                    "SELECT * FROM tasks WHERE bridge_session_id = ?", (session_id,)
+                )
+            ).fetchone()
+        return TaskRecord.model_validate(dict(row)) if row else None
+
+    async def list_tasks(self, project_id: str, limit: int = 100) -> list[TaskRecord]:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            rows = await (
+                await connection.execute(
+                    "SELECT * FROM tasks WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?",
+                    (project_id, limit),
+                )
+            ).fetchall()
+        return [TaskRecord.model_validate(dict(row)) for row in rows]
+
+    async def update_task_status(self, task_id: str, status: str, updated_at: str) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            cursor = await connection.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+                (status, updated_at, task_id),
+            )
+            if cursor.rowcount != 1:
+                raise LookupError(f"task not found: {task_id}")
+            await connection.commit()
+
+    async def insert_git_operation(
+        self,
+        operation_id: str,
+        session_id: str,
+        operation: str,
+        status: str,
+        detail_json: str,
+        created_at: str,
+        confirmation_id: str | None = None,
+        expected_base_commit: str | None = None,
+    ) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            await connection.execute(
+                """INSERT INTO git_operations
+                (id, session_id, operation, confirmation_id, expected_base_commit, status, detail_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (operation_id, session_id, operation, confirmation_id, expected_base_commit, status, detail_json, created_at),
+            )
+            await connection.commit()
+
+    async def get_git_operation(self, operation_id: str) -> dict[str, object] | None:
+        async with aiosqlite.connect(self.path) as connection:
+            connection.row_factory = aiosqlite.Row
+            row = await (
+                await connection.execute(
+                    "SELECT * FROM git_operations WHERE id = ?", (operation_id,)
+                )
+            ).fetchone()
+        return dict(row) if row else None
+
     async def update_session_status(
         self, session_id: str, status: str, updated_at: str
     ) -> None:
@@ -248,6 +461,19 @@ class Database:
                 "UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?",
                 (status, updated_at, session_id),
             )
+            await connection.commit()
+
+    async def set_session_v2_metadata(
+        self, session_id: str, project_id: str, task_name: str, updated_at: str
+    ) -> None:
+        async with aiosqlite.connect(self.path) as connection:
+            cursor = await connection.execute(
+                """UPDATE sessions SET project_id = ?, task_name = ?, updated_at = ?
+                WHERE id = ?""",
+                (project_id, task_name, updated_at, session_id),
+            )
+            if cursor.rowcount != 1:
+                raise LookupError(f"session not found: {session_id}")
             await connection.commit()
 
     async def update_agent_session_statuses(

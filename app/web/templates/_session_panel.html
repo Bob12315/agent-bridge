@@ -12,8 +12,8 @@
     <p class="mono muted">{{ session.workspace }}</p>
   </div>
   <div class="stage-box">
-    <div><span>阶段</span><strong>{{ stage if stage is not none else '—' }}</strong></div>
-    <div><span>轮次</span><strong>{{ round if round is not none else '—' }}</strong></div>
+    <div><span>Stage / 阶段</span><strong>{{ stage if stage is not none else '—' }}</strong></div>
+    <div><span>Round / 轮次</span><strong>{{ round if round is not none else '—' }}</strong></div>
   </div>
 </section>
 
@@ -39,7 +39,7 @@
   <p class="type-label">{{ current_message.type | upper if current_message else '请求' }}</p>
   <p>{{ current_message.content.text if current_message else current_request.message_id }}</p>
   <form method="post" action="/requests/{{ current_request.id }}/cancel">
-    <button class="button danger" type="submit">取消请求</button>
+    <button class="button danger" type="submit">Cancel request / 取消请求</button>
   </form>
   {% else %}
   <p class="muted">当前没有排队或运行中的 Agent 任务。</p>
@@ -48,7 +48,7 @@
 
 <div class="timeline-grid">
   <section class="panel">
-    <div class="section-title"><h2>消息时间线</h2><span>{{ messages | length }}</span></div>
+    <div class="section-title"><h2>Message Timeline / 消息时间线</h2><span>{{ messages | length }}</span></div>
     <div class="timeline">
       {% for message in messages | reverse %}
       <article class="timeline-item">
@@ -59,7 +59,7 @@
     </div>
   </section>
   <section class="panel">
-    <div class="section-title"><h2>事件时间线</h2><span>{{ events | length }}</span></div>
+    <div class="section-title"><h2>Event Timeline / 事件时间线</h2><span>{{ events | length }}</span></div>
     <div class="timeline">
       {% for event in events | reverse %}
       <article class="timeline-item">

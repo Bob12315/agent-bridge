@@ -29,6 +29,9 @@ class AgentConfig(BaseModel):
     command_prefix: list[str] = Field(default_factory=list)
     timeout_seconds: float = Field(default=1800, gt=0)
     health_timeout_seconds: float = Field(default=15, gt=0)
+    fallback_transport: str | None = None
+    plugin_endpoint: str = "http://127.0.0.1:8765"
+    plugin_token: str | None = None
 
 
 class CodexConfig(AgentConfig):

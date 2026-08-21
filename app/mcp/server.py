@@ -11,6 +11,7 @@ from app import __version__
 from app.adapters.base import AgentAdapter
 from app.adapters.registry import build_adapter_registry
 from app.bridge.request_manager import RequestManager
+from app.bridge.projects import ProjectManager
 from app.bridge.router import Router
 from app.bridge.session_manager import SessionManager
 from app.config import AppConfig, load_config
@@ -30,10 +31,12 @@ def build_service(
     router = Router(registered_adapters, storage)
     requests = RequestManager(storage, router)
     sessions = SessionManager(storage, WorkspaceManager(config.runtime.workspace_root))
+    projects = ProjectManager(storage, sessions)
     return BridgeToolService(
         storage,
         sessions,
         requests,
+        projects,
         synchronous_wait_seconds=config.bridge.synchronous_wait_seconds,
     )
 
@@ -62,6 +65,17 @@ def create_mcp_server(
         lifespan=lifespan,
     )
     server.tool()(bridge.bridge_create_session)
+    server.tool()(bridge.bridge_add_project)
+    server.tool()(bridge.bridge_list_projects)
+    server.tool()(bridge.bridge_get_project)
+    server.tool()(bridge.bridge_create_task)
+    server.tool()(bridge.bridge_list_tasks)
+    server.tool()(bridge.bridge_get_task)
+    server.tool()(bridge.bridge_recover_task)
+    server.tool()(bridge.bridge_transition_task)
+    server.tool()(bridge.bridge_git_preflight)
+    server.tool()(bridge.bridge_git_apply)
+    server.tool()(bridge.bridge_git_discard)
     server.tool()(bridge.bridge_inspect)
     server.tool()(bridge.bridge_send)
     server.tool()(bridge.bridge_wait)

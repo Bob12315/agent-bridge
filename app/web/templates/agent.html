@@ -14,7 +14,7 @@
   <span class="status {{ agent_session.status }}">{{ status_labels.get(agent_session.status, agent_session.status | upper) }}</span>
 </section>
 <section class="panel">
-  <div class="section-title"><h2>请求历史</h2><span>{{ requests | length }}</span></div>
+  <div class="section-title"><h2>Request History / 请求历史</h2><span>{{ requests | length }}</span></div>
   <div class="table-wrap"><table>
     <thead><tr><th>ID</th><th>状态</th><th>排队时间</th><th>完成时间</th><th>错误</th></tr></thead>
     <tbody>{% for item in requests %}<tr><td class="mono">{{ item.id }}</td><td><span class="status {{ item.status }}">{{ status_labels.get(item.status, item.status) }}</span></td><td>{{ item.queued_at.strftime('%H:%M:%S') }}</td><td>{{ item.finished_at.strftime('%H:%M:%S') if item.finished_at else '—' }}</td><td class="error-text">{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">该智能体暂无请求。</td></tr>{% endfor %}</tbody>
